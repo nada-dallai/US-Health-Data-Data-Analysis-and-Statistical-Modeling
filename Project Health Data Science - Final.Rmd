@@ -1,0 +1,1241 @@
+---
+title: "US Health Data: Data Analysis and Statistical Modeling"
+author: 'AI: Active Innovators'
+date: "2024-04-05"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+<h2>Arwa Rahmani: 903660</h2>
+<h2>Manar Larbi: 903670</h2>
+<h2>Wajih Boukhdhir: 903327</h2>
+<h2>Nada Dallai: 903644</h2>
+
+# Introduction:
+This document represents a Data Science project made as a part of the completion of the "Health and Data Science" Course at Ca' Foscari University of Venice. Within this work we find an analysis of the open-source COVID-19 dataset that includes information on individual counties and hospitals in the US. The data includes confirmed cases/deaths, demographics, risk factors, social distancing data, and much more.
+
+# Description of the dataset
+Data at the hospital level include the facility's address, the number of intensive care unit beds, all of the staff members, the kind of hospital, and contact details.
+Our data at the county level comes from USA Facts and NYT and includes social distance scores, COVID-19 instances and deaths, and socioeconomic characteristics.
+
+# Objective of the study
+This project's objective is to create a regression model to predict the heart disease mortality rate (number of deaths per 100,000 person) as well as a classification model related to children's poverty. Before that, a deep analysis of our dataset and its variables is required in order to choose the best predictors
+
+The project is divided into these main parts: <br>
+1- Data Cleaning and pre-processing
+2- EDA (Exploratory Data Analysis) for the regression models<br>
+3- Training different regression models for Hearth Disease Mortality and Assessment of models <br>
+4- Training a classification Model for Children poverty rate and its Assessment <br>
+
+
+# I - Expolartory Data Analysis
+## Data Cleaning and pre-processing:
+
+Let us start by importing the dataset:
+
+```{r}
+data <- read.csv("county_data_abridged.csv")
+num_rows_initial <- nrow(data)
+```
+
+Then we get a glimpse of our dataset:
+
+```{r}
+str(data)
+```
+
+We have a dataset with 3244 observations and 102 variables. <br>
+&rarr; After Analyzing thoroughly the dataset, we chose a specific set of columns that may help us in our models for prediction.
+
+We conduct a quick check-up to see if all needed columns are present in the dataset:
+
+```{r}
+columns_to_check <- c("PopulationEstimate2018", "PopulationEstimate65.2017", "PopulationDensityperSqMile2010", "CensusPopulation2010", "MedianAge2010", "PopMale.52010", "PopFmle.52010", "PopMale5.92010", "PopFmle5.92010", "PopMale10.142010", "PopFmle10.142010", "PopMale15.192010", "PopFmle15.192010", "PopMale20.242010", "PopFmle20.242010", "PopMale25.292010", "PopFmle25.292010", "PopMale30.342010", "PopFmle30.342010", "PopMale35.442010", "PopFmle35.442010", "PopMale45.542010", "PopFmle45.542010", "PopMale55.592010", "PopFmle55.592010", "PopMale60.642010", "PopFmle60.642010", "PopMale65.742010", "PopFmle65.742010", "PopMale75.842010", "PopFmle75.842010", "PopMale.842010", "PopFmle.842010", "X..Single.Parent.Households", "X..Severe.Housing.Problems", "Rural.UrbanContinuumCode2013", "X.Hospitals", "X.ICU_beds", "SVIPercentile", "HPSAServedPop", "HPSAShortage", "HPSAUnderservedPop", "HeartDiseaseMortality", "StrokeMortality", "RespMortalityRate2014", "DiabetesPercentage", "X3.YrMortalityAge.1Year2015.17", "X3.YrMortalityAge1.4Years2015.17", "X3.YrMortalityAge5.14Years2015.17", "X3.YrMortalityAge15.24Years2015.17", "X3.YrMortalityAge25.34Years2015.17", "X3.YrMortalityAge35.44Years2015.17", "X3.YrMortalityAge45.54Years2015.17", "X3.YrMortalityAge55.64Years2015.17", "X3.YrMortalityAge65.74Years2015.17", "X3.YrMortalityAge75.84Years2015.17", "X3.YrMortalityAge85.Years2015.17", "Smokers_Percentage", "X..Adults.with.Obesity", "dem_to_rep_ratio",  "StateName",  "CensusDivisionName","X..Children.in.Poverty","X..Unemployed","X..Uninsured","X..Vaccinated","X..Uninsured","HPSAServedPop","TotalM.D..s.TotNon.FedandFed2017", "X.Hospitals","X..Fair.or.Poor.Health", "MedianAge2010", "X..Severe.Housing.Problems")
+
+# Check if columns from the list are present in the dataset
+columns_present <- columns_to_check[columns_to_check %in% colnames(data)]
+
+# Print columns not present in the dataset
+columns_not_present <- columns_to_check[!columns_to_check %in% colnames(data)]
+print(columns_not_present)
+```
+And then store our subset the data to leave only the precised columns in a dataset called "data_subset":
+```{r}
+# Find common columns between dataset and the list
+common_columns <- intersect(columns_to_check, colnames(data))
+
+# Subset the dataset using the common columns
+data_subset <- data[, common_columns]
+
+# We have selected 68 variables
+dim(data_subset)
+```
+
+Replacing empty values with NA and changing categorical character variables "StateName" and "CensusDivisionName", as well as the rural code variable into factor variables:
+
+```{r}
+# Making Empty values as NA
+library(dplyr)
+
+# Replace all empty values with NA
+data_subset[data_subset == ""] <- NA
+
+# Making the character variables as factor
+data_subset$StateName <- as.factor(data_subset$StateName)
+data_subset$CensusDivisionName <- as.factor(data_subset$CensusDivisionName)
+# Making the variable urban rural code into a factor (it represents 9 codes )
+data_subset$Rural.UrbanContinuumCode2013 <- factor(data_subset$Rural.UrbanContinuumCode2013)
+```
+
+Printing the new summary:
+
+```{r}
+summary(data_subset)
+```
+
+We have many NA values across all variables that we need to deal with using different methods.
+Before that, we will limit our dataset to the counties that are inside the united states and that aren't private territories outside the country:
+
+```{r}
+# Define a vector containing state abbreviations
+state_abbreviations <- c("AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", 
+                         "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", 
+                         "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", 
+                         "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", 
+                         "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY")
+
+# Filter rows with StateName containing state abbreviations
+data_subset <- data_subset[data_subset$StateName %in% state_abbreviations, ]
+```
+
+We will start by removing the NA values for our target variable "HeartDiseaseMortality"
+
+```{r}
+print(dim(data_subset))
+
+
+# Remove rows with NA values in the "HeartDiseaseMortality" column
+data_subset <- data_subset[complete.cases(data_subset$HeartDiseaseMortality), ]
+
+# Check the dimensions of the dataset after removing rows
+print(dim(data_subset))
+```
+
+```{r}
+# Calculate the number of NA values in each column
+na_count <- sapply(data_subset, function(x) sum(is.na(x)))
+
+# Print the column names and their corresponding number of NA values (excluding columns with 0 NA values)
+# Here I suggest we only print out the names of the columns with  NA's to be certain our code worked, no need for the full list of columns with NA values
+print(na_count[na_count == 0])
+```
+The deletion of the NA values from the needed columns was successful!
+
+
+```{r}
+# Get column names containing "PopMale" or "PopFmle"
+matching_columns <- grep("PopMale|PopFmle", names(data_subset), value = TRUE)
+
+# Print the matching column names
+print(matching_columns)
+```
+
+```{r}
+# Filter the dataset to include only the columns of interest
+subset_data <- data_subset[, matching_columns]
+
+# Count the number of rows with NA values
+rows_with_na <- sum(!complete.cases(subset_data))
+
+# Print the number of rows with NA values
+print(paste("Number of rows with NA values:", rows_with_na))
+```
+
+Columns related to the populations of different ages of male and female persons in 2010 have the same row number with the presence of only 1 NA value, let's remove it! <br>
+
+In addition, we will remove rows containing NA values for the following columns (they contain 1 NA value for each variable): <br>
+- "X..Single.Parent.Households" <br>
+- "SVIPercentile" <br>
+- "StrokeMortality" <br>
+- "DiabetesPercentage"
+
+```{r}
+print(dim(data_subset))
+
+# Remove rows with NA values in a specific column
+data_subset <- subset(data_subset, 
+                      !is.na(PopMale.52010) &
+                      !is.na(X..Single.Parent.Households) &
+                      !is.na(SVIPercentile) &
+                      !is.na(StrokeMortality) &
+                      !is.na(DiabetesPercentage))
+
+# Check the dimensions of the dataset after removing rows
+print(dim(data_subset))
+```
+
+Using proportions or rates by dividing the count of certain population groups by the whole population count enhances the clarity, comparability, and interpretability of the data. It ensures that analyses are not skewed by population size differences and provides a standardized way to assess the impact or prevalence of specific characteristics within a population. <br> 
+
+That's exactly what we are doing in the next code chunk:
+
+```{r}
+# Define the column names containing the populations according to age and sex
+pop_columns <- c(
+  "PopulationEstimate65.2017",
+  "PopMale.52010",
+  "PopFmle.52010",
+  "PopMale5.92010",
+  "PopFmle5.92010",
+  "PopMale10.142010",
+  "PopFmle10.142010",
+  "PopMale15.192010",
+  "PopFmle15.192010",
+  "PopMale20.242010",
+  "PopFmle20.242010",
+  "PopMale25.292010",
+  "PopFmle25.292010",
+  "PopMale30.342010",
+  "PopFmle30.342010",
+  "PopMale35.442010",
+  "PopFmle35.442010",
+  "PopMale45.542010",
+  "PopFmle45.542010",
+  "PopMale55.592010",
+  "PopFmle55.592010",
+  "PopMale60.642010",
+  "PopFmle60.642010",
+  "PopMale65.742010",
+  "PopFmle65.742010",
+  "PopMale75.842010",
+  "PopFmle75.842010",
+  "PopMale.842010",
+  "PopFmle.842010"
+)
+
+# Divide each of these columns by "CensusPopulation2010" to create ratios
+for (column in pop_columns) {
+  data_subset[column] <- data_subset[column] / data_subset$CensusPopulation2010}
+```
+
+One last NA check-up:
+
+```{r}
+# Calculate the number of NA values in each column
+na_count <- sapply(data_subset, function(x) sum(is.na(x)))
+
+# Print the column names and their corresponding number of NA values (excluding columns with 0 NA values)
+print(na_count[na_count == 0])
+```
+
+We continue to explore what variables are important to the study and what other variables can be discarded:
+
+```{r}
+# Check the correlation between HPSA-related variables and "HeartDiseaseMortality"
+correlation_matrix <- cor(data_subset[c("HPSAServedPop", "HPSAUnderservedPop", "HPSAShortage", "HeartDiseaseMortality")], use = "pairwise.complete.obs")
+
+# Print the correlation matrix
+print("Correlation Matrix:")
+print(correlation_matrix)
+
+# Calculate the percentage of rows with missing data for these columns
+missing_percentage <- apply(data_subset[c("HPSAServedPop", "HPSAUnderservedPop", "HPSAShortage")], 2, function(x) {
+  sum(is.na(x)) / length(x) * 100
+})
+
+# Print the percentage of rows with missing data
+print("Percentage of Rows with Missing Data:")
+print(missing_percentage)
+```
+
+Data Related to HPSA (Healthcare shortage area) have a very weak linear relationship with our target variable. In addition, 35% of rows in our dataset have NA values for all the 3 columns above ('HPSAServedPop', 'HPSAUnderservedPop', 'HPSAShortage')
+
+&rarr; dropping these columns is likely the best option
+We will also remove the follwoing columns because they have NA values for almost the entire dataset:<br> 
+- "X3.YrMortalityAge.1Year2015.17" <br>
+- "X3.YrMortalityAge1.4Years2015.17" <br>
+- "X3.YrMortalityAge5.14Years2015.17" <br>
+- "X3.YrMortalityAge15.24Years2015.17" <br>
+- "X3.YrMortalityAge45.54Years2015.17" <br>
+- "X3.YrMortalityAge35.44Years2015.17" <br>
+- "X3.YrMortalityAge25.34Years2015.17"
+
+```{r}
+matching_columns <- c("HPSAServedPop","HPSAUnderservedPop","HPSAShortage")
+
+# Filter the dataset to include only the columns of interest
+subset_data <- data_subset[, matching_columns]
+
+# Count the number of rows with NA values
+rows_with_na <- sum(!complete.cases(subset_data))
+
+# Print the number of rows with NA values
+print(paste("Number of rows with NA values:", rows_with_na))
+
+print(dim(data_subset))
+
+# Create a new dataset excluding the HPSA-related columns
+data_subset <- subset(data_subset, select = -c(HPSAServedPop, HPSAUnderservedPop, HPSAShortage))
+
+# Create a new dataset excluding the MortalityAge columns
+data_subset <- subset(data_subset, select = -c(X3.YrMortalityAge.1Year2015.17, X3.YrMortalityAge1.4Years2015.17, X3.YrMortalityAge5.14Years2015.17,X3.YrMortalityAge15.24Years2015.17,X3.YrMortalityAge25.34Years2015.17,X3.YrMortalityAge35.44Years2015.17,X3.YrMortalityAge45.54Years2015.17))
+
+# Check the dimensions of the new dataset
+print(dim(data_subset))
+```
+
+Making sure our technique worked:
+
+```{r}
+# Calculate the number of NA values in each column
+na_count <- sapply(data_subset, function(x) sum(is.na(x)))
+
+# Print the column names and their corresponding number of NA values (excluding columns with 0 NA values)
+print(na_count[na_count > 0])
+```
+
+For the remaining columns that contain NA values, we will try to implement some **imputation** on them in order to avoid missing data as they can help in predicting our target variable.
+
+### 1. Mean Imputation: <br>
+
+**Mean Imputation method:**
+Mean imputation (MI) is one such method in which the mean of the observed values for each variable is computed and the missing values for that variable are imputed by this mean.
+
+Since "dem_to_rep_ratio" represents a political ratio and contains only 18 rows with NA values, we will try to impute the missing values using a simple mean imputation. we will do that also for "vaccinated" variable.
+
+```{r}
+# Calculate the mean of 'dem_to_rep_ratio' excluding NA values
+mean_dem_to_rep_ratio <- mean(data_subset$dem_to_rep_ratio, na.rm = TRUE)
+
+# Replace missing values with the mean
+data_subset$dem_to_rep_ratio[is.na(data_subset$dem_to_rep_ratio)] <- mean_dem_to_rep_ratio
+
+if (sum(is.na(data_subset$dem_to_rep_ratio)) == 0) {
+  print("No more NA values in the 'dem_to_rep_ratio' column after mean imputation.")
+} else {
+  print("NA values still present in the 'dem_to_rep_ratio' column after mean imputation.")
+}
+
+# Calculate the mean of 'X..Vaccinated' excluding NA values
+mean_vac_ratio <- mean(data_subset$X..Vaccinated, na.rm = TRUE)
+
+# Replace missing values with the mean
+data_subset$X..Vaccinated[is.na(data_subset$X..Vaccinated)] <- mean_vac_ratio
+
+if (sum(is.na(data_subset$X..Vaccinated)) == 0) {
+  print("No more NA values in the 'X..Vaccinated' column after mean imputation.")
+} else {
+  print("NA values still present in the 'X..Vaccinated' column after mean imputation.")
+}
+```
+
+### 2. KNN Imputation:
+
+For the remaining variable "Mortality Rates", we see that it contains between 150 and 450 rows with NA values. Thus, we should preserve the distribution and relationships of the data. <br>
+
+**K-nearest neighbors (KNN) imputation:** Suitable method for imputing missing values in mortality data. KNN imputation estimates missing values based on similar observations, which can effectively capture the underlying patterns in the mortality rates. <br>
+
+We will do this using the package "VIM" that stands for: Visualisation and Imputation of Missing Values
+
+```{r}
+library(VIM)
+```
+
+```{r}
+# Perform KNN imputation
+# I added imp_var = FALSE in order to not print logical variable about imputation status
+imputed_data <- kNN(data_subset, k = 5,imp_var=FALSE)
+```
+
+```{r}
+# Calculate the number of NA values in each column
+na_count <- sapply(imputed_data, function(x) sum(is.na(x)))
+
+# Print the column names and their corresponding number of NA values (excluding columns with 0 NA values)
+print(na_count[na_count > 0])
+
+Final_Data = imputed_data
+```
+No existence of NA values.
+
+```{r}
+num_rows_final <- nrow(Final_Data)
+print("The initial number of rows in the dataset")
+print(num_rows_initial)
+print("The number of removed rows")
+print( num_rows_initial- num_rows_final)
+ratio_removed_rows = 100*((num_rows_initial- num_rows_final)/(num_rows_initial))
+print("The percentage of rows removed")
+print(ratio_removed_rows)
+```
+
+&rarr; Our Dataset is finally cleaned and ready for the next steps of analysis after dealing with missing data through removing rows/columns and imputation (Mean imputation and KNN imputation)
+
+# II- Heart Disease Mortality Analysis:
+
+## Study over Variables to include in the model
+
+The first purpose of the study will be the analysis of the heart disease mortality rate, its distribution, its relationship with other variables, and the best model to fit for the study variable.
+
+```{r}
+library(ggplot2)
+```
+
+### 1. Summary table:
+```{r}
+summary(Final_Data$HeartDiseaseMortality)
+```
+
+### 2. Distribution of the Heart Disease Mortality rate variable:
+We do this by first calculating the mean and variance of the variable
+
+```{r}
+# Calculate variance of Heart Disease Mortality
+variance_heart_disease_mortality <- var(Final_Data$HeartDiseaseMortality)
+
+# Calculate mean of Heart Disease Mortality
+mean_heart_disease_mortality <- mean(Final_Data$HeartDiseaseMortality)
+
+# Print as a table
+result_table <- data.frame(
+  Statistic = c("Mean", "Variance"),
+  Value = c(mean_heart_disease_mortality, variance_heart_disease_mortality)
+)
+print(result_table)
+```
+
+### 3. The Heart Disease Mortality rate by State:
+
+```{r}
+# Group the data by StateName and calculate the mean heart disease mortality rate for each state
+heart_disease_summary <- Final_Data %>%
+  group_by(StateName) %>%
+  summarize(mean_heart_disease_mortality = mean(HeartDiseaseMortality, na.rm = TRUE)) %>%
+  arrange(desc(mean_heart_disease_mortality))  # Arrange by mean mortality rate in descending order
+
+# Print the summary table
+print(heart_disease_summary)
+```
+
+&rarr; Mississippi (MS), Alabama (AL) and Oklahoma(OK) are having the highest mortality rates linked to heart diseases (More than 241 death per 100,000). Let's also note that all these states are located in the south. <br>
+
+
+### 4. The Heart Disease Mortality rate per Census Division (Geographic areas):
+
+This is done in the form of a bar chart that has ordered bars ranking Census divisions from lowest to highest rates.
+
+```{r}
+# Calculate mean heart disease mortality rate per CensusDivisionName
+mean_mortality <- Final_Data %>%
+  group_by(CensusDivisionName) %>%
+  summarize(mean_heart_disease_mortality = mean(HeartDiseaseMortality, na.rm = TRUE)) %>%
+  arrange(mean_heart_disease_mortality)  # Arrange by mean mortality rate
+
+# Plotting the bar graph with ordered bars
+ggplot(mean_mortality, aes(x = reorder(CensusDivisionName, mean_heart_disease_mortality), y = mean_heart_disease_mortality)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Mean Heart Disease Mortality Rate by Census Division",
+       x = "Census Division Name",
+       y = "Mean Heart Disease Mortality Rate") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better readability
+```
+
+<br>
+&rarr; Most divisions having the highest mortality rate are part of the South divisions (East South Central, West South Central, South Atlantic). This confirms the previous findings. The target variable varies significantly according to the region. Therefore, we should include the variable relating to Census Division in the model.
+
+### 5. Study of relationship between the study variable (Heart Disease Mortality rate) and other variables:
+
+Let us see if there is any relation between our target variable and the the **smokers' percentages**
+
+```{r}
+# Plotting the scatter plot
+ggplot(Final_Data, aes(x = Smokers_Percentage, y = HeartDiseaseMortality)) +
+  geom_point(shape = 8) +
+  geom_smooth() +
+  labs(title = "Scatter Plot of Heart Disease Mortality Rate vs Smokers Percentage",
+       x = "Smokers Percentage",
+       y = "Heart Disease Mortality Rate") +
+  theme_minimal()
+```
+<br>
+&rarr; we can see a strong *positive relationship* between heart disease mortality rate and smokers' percentage, making this latter a good candidate variable for prediction later.
+
+Let us see if there any relationship between the heart disease mortality rate and **diabetes percentage**
+
+```{r}
+ggplot(Final_Data, aes(x=DiabetesPercentage, y=HeartDiseaseMortality)) +
+  geom_point(shape = 8) +
+  geom_smooth() +
+  labs(title="Smoothed Scatter Plot of Heart Disease Mortality vs Diabetes Percentage",
+       x="Diabetes Percentage",
+       y="Heart Disease Mortality Rate") +
+  theme_minimal()
+```
+
+We can see a *slight positive linear relationship* between Diabetes Percentage and our target variable. <br>
+
+We remove the unnecessary "StateName" column.
+```{r}
+# remove the column "StateName" (We dont need it for prediction)
+Final_Data <- Final_Data[, !names(Final_Data) %in% c("StateName")]
+```
+
+The relationship existance between Heart Disease Mortality rate variable and the other variables of the datasets can be reflected by the correlations of those variables with our study variable. In that context, we derive an **ordered correlations' data frame**:
+```{r}
+# Exclude CensusDivisionName variable
+predictor_variables <- Final_Data[, -which(names(Final_Data) %in% c("HeartDiseaseMortality", "CensusDivisionName","Rural.UrbanContinuumCode2013"))]
+
+# Calculate correlations
+correlations <- cor(predictor_variables, Final_Data$HeartDiseaseMortality)
+
+# Create a data frame with variable names and correlations
+correlation_df <- data.frame(
+  Variable = names(predictor_variables),
+  Correlation = correlations
+)
+
+# Order correlations in descending order
+ordered_correlation_df <- correlation_df[order(abs(correlation_df$Correlation), decreasing = TRUE), ]
+
+# Print ordered correlations along with variable names
+print(ordered_correlation_df)
+```
+We notice that the variables that have the highest correlation with our study variable are smokers' percentage and the state of health (X..Fair.or.Poor.Health) of individuals, as well as the Children in poverty percentage (X..Children.in.Poverty) with correlations of 0.6 but the the correlations are still considered to be *low*.
+
+### 6. Training of different regression models for Heart Disease Mortality:
+
+#### Distribution of Data:
+
+In statistics, a Q–Q plot (quantile–quantile plot) is a probability plot, a graphical method for comparing two probability distributions by plotting their quantiles against each other. A Q–Q plot is used to compare the shapes of distributions, providing a graphical view of how properties such as *location*, *scale*, and *skewness* are similar or different in the two distributions. Q–Q plots can be used to compare collections of data, or theoretical distributions. 
+
+By drawing a normal Q-Q and its respective Q-Q line, we can better discover our study variable:
+
+```{r}
+qqnorm(Final_Data$HeartDiseaseMortality)
+qqline(Final_Data$HeartDiseaseMortality, col = 2)
+```
+
+**Shapiro–Wilk test:** <br>
+The Shapiro–Wilk test is essentially a goodness-of-fit test. That is, it examines how close the sample data fit to a normal distribution. If the test's p_value is greater than 0.05 the data is normal.
+
+So to top it off, we use Shapiro–Wilk normality test:
+
+```{r}
+shapiro.test(Final_Data$HeartDiseaseMortality)
+```
+
+The results show that the distribution of our target variable is right skewed (not following a normal distribution) and the relationship between the independent and dependent variables is not very linear (concluded through the correlation table), which violates one of the key assumptions of linear regression. <br>
+
+Additionally, we know that linear regression is sensitive to outliers and can produce biased estimates when the data is highly skewed (which is our case).
+
+&rarr; since our target variable is *continuous*, *non-negative*, and its *distribution is right skewed*, we will check if it follows a gamma regression.
+
+#### 1. Gamma Regression Model:
+
+##### Compatibility tests
+
+Let's first check whether it is suitable to build a Gamma Regression model.
+
+```{r}
+ggplot(data = Final_Data, aes(x = HeartDiseaseMortality)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Heart Disease Mortality",
+       x = "Heart Disease Mortality",
+       y = "Frequency")
+```
+
+<br>
+&rarr; The distribution of heart disease mortality in right-skewed with the most frequent values are approximately between 160 and 190 mortality per 100,000 person
+
+```{r}
+library(fitdistrplus)
+# Fit a gamma distribution to our data
+fit <- fitdistr(Final_Data$HeartDiseaseMortality, "gamma")
+
+# Generate theoretical quantiles
+theoretical_quantiles <- qgamma(ppoints(length(Final_Data$HeartDiseaseMortality)), shape = fit$estimate[1], rate = fit$estimate[2])
+
+# Plot Q-Q plot
+qqplot(theoretical_quantiles, sort(Final_Data$HeartDiseaseMortality), 
+       xlab = "Theoretical Quantiles (Gamma Distribution)",
+       ylab = "Sample Quantiles")
+abline(0, 1, col = "red")  # Add a line of equality
+```
+<br>
+The data is approximately following a gamma distribution. 
+
+```{r}
+# Create a boxplot
+boxplot(Final_Data$HeartDiseaseMortality, 
+        main = "Boxplot of Heart Disease Mortality",
+        ylab = "Heart Disease Mortality")
+```
+
+<br>
+The box plot confirms the existence of some outliers. Since, the **removal of outliers** might drive better results are avoid deviations from the Q-Q plot tails, so let's do that: 
+
+```{r}
+# Compute IQR
+Q1 <- quantile(Final_Data$HeartDiseaseMortality, 0.25)
+Q3 <- quantile(Final_Data$HeartDiseaseMortality, 0.75)
+IQR <- Q3 - Q1
+
+# Compute lower and upper bounds
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+
+# Identify outliers
+outliers <- Final_Data$HeartDiseaseMortality[Final_Data$HeartDiseaseMortality < lower_bound | Final_Data$HeartDiseaseMortality > upper_bound]
+```
+
+```{r}
+dim(Final_Data)
+```
+
+```{r}
+# Filter out outliers
+Final_Data <- Final_Data[Final_Data$HeartDiseaseMortality >= lower_bound & Final_Data$HeartDiseaseMortality <= upper_bound, ]
+
+```
+
+```{r}
+dim(Final_Data)
+```
+
+```{r}
+# Fit a gamma distribution to our data
+fit <- fitdistr(Final_Data$HeartDiseaseMortality, "gamma")
+
+# Generate theoretical quantiles
+theoretical_quantiles <- qgamma(ppoints(length(Final_Data$HeartDiseaseMortality)), shape = fit$estimate[1], rate = fit$estimate[2])
+
+# Plot Q-Q plot
+qqplot(theoretical_quantiles, sort(Final_Data$HeartDiseaseMortality), 
+       xlab = "Theoretical Quantiles (Gamma Distribution)",
+       ylab = "Sample Quantiles")
+abline(0, 1, col = "red")  # Add a line of equality
+```
+<br>
+After removing the outliers, the distribution of our data follows better that of a gamma. <br>
+
+**Kolmogorov–Smirnov statistic**
+The Kolmogorov–Smirnov statistic quantifies a distance between the empirical distribution function of the sample and the cumulative distribution function of the reference distribution, or between the empirical distribution functions of two samples.
+
+Let's apply this test on our gamma fit: 
+
+```{r}
+# Fit a gamma distribution to your data
+fit <- fitdistr(Final_Data$HeartDiseaseMortality, "gamma")
+
+# Perform the Kolmogorov-Smirnov test
+ks.test(Final_Data$HeartDiseaseMortality, "pgamma", shape = fit$estimate[1], rate = fit$estimate[2])
+```
+&rarr; P-Value is very close to 5% and the plot showing that it follows a *gamma distribution*. <br>
+*Gamma regression* as previously stated, our response variable is continuous and non-negative, and its distribution is skewed with a longer right tail, which aligns with the characteristics of a gamma distribution.
+
+##### Gamma Regression Model:
+
+```{r}
+# Perform gamma regression
+gamma_model <- glm(Final_Data$HeartDiseaseMortality ~ CensusDivisionName + 
+    Smokers_Percentage + X..Children.in.Poverty + RespMortalityRate2014 + 
+    StrokeMortality +  DiabetesPercentage + X..Adults.with.Obesity + 
+     PopulationEstimate65.2017 , 
+                   family = Gamma(link = "log"), 
+                   data = Final_Data)
+
+# View model summary
+summary(gamma_model)
+```
+
+**INTERPRETATIONS:** <br>
+
+<u>*Intercept* </u><br>
+It represents the expected log Heart Disease Mortality when all predictors are at their reference levels or zero.
+
+<u>*CensusDivisionName Coefficients*</u><br>
+These coefficients represent the effect of each Census Division compared to the reference category which is "East North Central".For example, the Middle Atlantic division has a coefficient of 0.0674732, meaning Heart Disease Mortality is higher by a factor of exp(0.0674732) ≈ 1.070 compared to the reference.
+
+<u>*Continuous predictors*</u><br>
+
+* All of the variables (Except 'PopulationEsitmate65.2017') are statistically significant (Their p-value is lower than 0.05) <br>
+* Each variable coefficient shows the change in the log of Heart Disease Mortality rate for a one-unit change in that predictor variable with holding all other predictors constant. For example: 0.0088317 is the change of the log value of Heart Disease Mortality Rate for a one-unit increase in smokers percentage (Positive Association) <br>
+* The model explains a significant portion of the variability in heart disease mortality, as indicated by the substantial reduction in deviance from the null model to the residual model. The null deviance (142.895) compared to the residual deviance (54.837) shows that the predictors included in the model provide a much better fit to the data. <br>
+
+  + **Goodness of fit of the model**
+
+Pseudo-R-squared values are used when the outcome variable is nominal or ordinal such that the coefficient of determination R2 cannot be applied as a measure for goodness of fit and when a likelihood function is used to fit a model. Pseudo R-squared measures are used in Gamma regression and other GLMs because they provide a more appropriate and meaningful assessment of model fit compared to traditional R-squared.
+
+Let's check the goodness of fit of our model:
+
+```{r}
+print("Pseudo R squared")
+pcr = (gamma_model$null.deviance - gamma_model$deviance)/gamma_model$null.deviance
+print(pcr)
+
+```
+
+&rarr; 62% of the variability in the heart disease mortality rate is explained by the gamma regression model <br>
+
+  + **Multicollinearity**
+
+*Multicollinearity* is when collinearity exists between three or more variables even if no pair of variables has a particularly high correlation. In the presence of multicollinearity, the solution of the regression model becomes unstable.
+
+Let's check for the presence of multicollinearity using the vif() function of the car package that computes a score called the **variance inflation factor (or VIF)**. As a rule of thumb, a VIF value that exceeds 5 or 10 indicates a problematic amount of collinearity:
+
+```{r}
+# Load required library
+library(dplyr)
+library(car)
+
+# Check for multicollinearity
+vif_values <- car::vif(gamma_model)
+
+# Print VIF values
+print(vif_values)
+```
+
+&rarr; No VIF values over 5: no multicollinearity.
+
+  + **Residuals, heteroskedasticity and independence:**
+
+By creating a histogram and scatterplot of residuals, we effectively diagnose and validate key assumptions of our regression model.
+
+```{r}
+# Step 1: Obtain residuals
+residuals <- residuals(gamma_model)
+
+# Step 2: Plot residuals
+hist(residuals, breaks = 20, main = "Histogram of Residuals", xlab = "Residuals")
+
+# Step 3: Check for patterns
+plot(fitted(gamma_model), residuals, main = "Residuals vs Fitted Values", 
+     xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "red")  # Add a horizontal line at y = 0
+```
+
+The residuals are randomly scattered around the horizontal line at zero, with no discernible pattern.
+
+&rarr; This suggests that the assumption of linearity is met, indicating that the relationship between the independent variables and the dependent variable is adequately captured by the model.
+
+Let's check for the **heteroskedasticity** existence: 
+```{r}
+# Diagnostic plot: plot of standardized residuals against fitted values
+plot(gamma_model$fitted.values, rstandard(gamma_model))
+```
+
+The points are randomly scattered around the horizontal line at y=0. 
+
+&rarr; No heteroskedasticity
+
+
+**Durbin Watson Test:**
+The Durbin-Watson test is a statistical test used to detect the presence of autocorrelation (a relationship between values separated from each other by a given time lag) in the residuals from a regression analysis.
+
+We will check for the **independence of residuals** using the Durbin Watson Test:
+
+```{r}
+durbinWatsonTest(gamma_model)
+```
+
+&rarr; DW test value is between 1.5 and 2.5 which is acceptable 
+
+  + **Model assessment:**
+
+Cross-validation is a robust method for assessing the performance and generalizability of a statistical model. Let's apply it to assess our model:
+
+```{r}
+# Example cross-validation
+# install.packages("caret")
+# install.packages("Metrics")
+library(caret)
+library(Metrics)
+
+set.seed(123)
+trainIndex <- createDataPartition(Final_Data$HeartDiseaseMortality, p = 0.8, list = FALSE)
+train_data <- Final_Data[trainIndex, ]
+test_data <- Final_Data[-trainIndex, ]
+gamma_model_cv <- glm(HeartDiseaseMortality ~ CensusDivisionName + 
+    Smokers_Percentage + X..Children.in.Poverty + RespMortalityRate2014 + 
+    StrokeMortality +  DiabetesPercentage + X..Adults.with.Obesity + 
+    PopulationEstimate65.2017, 
+                      family = Gamma(link = "log"), 
+                      data = train_data)
+predictions <- predict(gamma_model_cv, newdata = test_data)
+y_pred = exp(predictions)
+
+# Calculate MSE and MAE
+gamma_mse <- mse(test_data$HeartDiseaseMortality, y_pred)
+gamma_mae <- mae(test_data$HeartDiseaseMortality, y_pred)
+
+cat("Mean Squared Error (MSE):", gamma_mse, "\n")
+cat("Mean Absolute Error (MAE):", gamma_mae, "\n")
+
+```
+**MSE** gives an indication of the average squared difference between the observed and predicted values. While it doesn’t have a direct interpretation (as it’s in the squared units of the response variable), it allows for comparison with other models.
+
+**MAE** represents the average absolute difference between the observed and predicted values. It’s in the same units as the response variable, making it more interpretable.
+
+&rarr; An MAE of 20.01313 indicates that on average, the model’s predictions are off by about 20 units.
+
+
+#### 2. Log Cost Model:
+
+Let's try implementing linear regression while using log-transformation:
+
+```{r}
+Final_Data$log_HeartDiseaseMortality <- log(Final_Data$HeartDiseaseMortality)
+```
+
+```{r}
+summary(Final_Data$log_HeartDiseaseMortality)
+```
+```{r}
+# Perform linear regression using trasformed variable
+log_model <- lm(Final_Data$log_HeartDiseaseMortality ~ CensusDivisionName + 
+    Smokers_Percentage + X..Children.in.Poverty + RespMortalityRate2014 + 
+    StrokeMortality +  DiabetesPercentage + X..Adults.with.Obesity + 
+     PopulationEstimate65.2017 , 
+                   data = Final_Data)
+
+# View model summary
+summary(log_model)
+```
+
+**INTERPRETATIONS:** <br>
+
+<u>*Intercept:* </u><br>
+This is the expected log value of Heart Disease Mortality when all predictors are at their reference levels (baseline category for categorical variables, zero for continuous variables).
+
+<u>*CensusDivisionName Coefficients:* </u><br>
+These coefficients represent the effect of each Census Division compared to the reference category which is "East North Central". For example the coefficient for "Middle Atlantic" division compared to the reference category, after controlling the other variables. 
+
+<u>*Other Variables:* </u><br>
+
+* Each variable coefficient shows the change in the log of Heart Disease Mortality rate for a one-unit change in that predictor variable with holding all other predictors constant. <br>
+* The adjusted R squared value indicates that 61.79% of the variability in log_HeartDiseaseMortality is explained by the model. <br>
+
+  + **Model assessment:** Cross Validation for our log-Cost Model
+
+```{r}
+library(caret)
+library(Metrics)
+
+set.seed(123)
+trainIndex <- createDataPartition(Final_Data$log_HeartDiseaseMortality, p = 0.8, list = FALSE)
+train_data <- Final_Data[trainIndex, ]
+test_data <- Final_Data[-trainIndex, ]
+log_cost_model <- lm(log_HeartDiseaseMortality ~ CensusDivisionName + 
+    Smokers_Percentage + X..Children.in.Poverty + RespMortalityRate2014 + 
+    StrokeMortality +  DiabetesPercentage + X..Adults.with.Obesity + 
+     PopulationEstimate65.2017, 
+                      data = train_data)
+predictions <- predict(log_cost_model, newdata = test_data)
+y_pred = exp(predictions)
+
+# Calculate MSE and MAE
+logcost_mse <- mse(test_data$HeartDiseaseMortality, y_pred)
+logcost_mae <- mae(test_data$HeartDiseaseMortality, y_pred)
+
+cat("Mean Squared Error (MSE):", logcost_mse, "\n")
+cat("Mean Absolute Error (MAE):", logcost_mae, "\n")
+```
+&rarr; An MAE of 19.97 suggests that, on average, the model's predictions are within approximately 19.97 units of the actual values.
+
+### 7. Assesment of regression models:
+
+To choose between the Gamma regression model and the log-transformed linear model, we can compare their performance metrics such as Mean Squared Error (MSE) and Mean Absolute Error (MAE) ⇒ We cannot use the AIC for these two models as they are not fit on the same scale
+
+
+```{r}
+# Create a data frame with model names, MSE, and MAE
+comparison_table <- data.frame(
+  Model = c("Gamma Regression Model" ,"Log Cost Model"),
+  MSE = c(gamma_mse, logcost_mse),
+  MAE = c(gamma_mae, logcost_mae)
+)
+
+# Order the table by MSE values in ascending order
+comparison_table <- comparison_table[order(comparison_table$MSE),, drop = FALSE]
+
+# Print the comparison table without row names
+print(comparison_table, row.names = FALSE)
+```
+
+&rarr; The Gamma Regression Model has a slightly lower MSE (669.4812) compared to the Log Cost Model (674.5060), indicating a marginally better fit. <br>
+&rarr; The Log Cost Model has a slightly lower MAE (19.97576) compared to the Gamma Regression Model (20.01313), indicating a marginally better fit in terms of absolute errors. <br>
+
+**Conclusion:**<br>
+Both models are close in terms of performance metrics. However, the Gamma Regression Model is better suited for positively skewed data and it gives interpretable coefficients in terms of multiplicative effects on the response variable. It also has a slightly better MSE, indicating it captures the variability of the response variable slightly better than the Log Cost Model.
+
+## Children Poverty Rate Analysis:
+
+### 1. Exploring relationships between the children's poverty rate variable and other variables:
+
+Let's try to classify our data according to the relative percentage of Children poverty by creating three classes "Low", "Moderate", "High"; with the respective percentages ranging from [0,20%], [20%,30%] and [30%, +$\infty$].
+
+```{r}
+poverty_percentages <- Final_Data$X..Children.in.Poverty
+
+# Define our categories
+category_labels <- c("Low", "Moderate", "High")
+
+# Define the breakpoints for the intervals
+breakpoints <- c(-Inf,  20, 30,  Inf)  # Customize these breakpoints as needed
+
+# Create the categorical variable
+Final_Data$Children_Poverty_Category <- cut(poverty_percentages, breaks = breakpoints, labels = category_labels, include.lowest = TRUE)
+
+# Print the first few rows of the updated dataset to verify
+head(Final_Data)
+```
+
+Let's visualize the categories in a bar chart:
+
+```{r}
+# Load required libraries
+library(ggplot2)
+
+# Create a bar plot
+ggplot(Final_Data, aes(x = Children_Poverty_Category)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  labs(title = "Poverty Categories of Children",
+       x = "Poverty Category",
+       y = "Count")
+
+```
+
+&rarr; The most present category in our datastet is the Low Category
+
+Let's check how the population number affects the poverty levels previously created through a bar plot:
+
+```{r}
+# Load required libraries
+library(ggplot2)
+
+# Create a summary dataset with average CensusPopulation2010 for each poverty category
+summary_data <- aggregate(CensusPopulation2010 ~ Children_Poverty_Category, data = Final_Data, FUN = mean)
+
+# Create a bar plot
+ggplot(summary_data, aes(x = Children_Poverty_Category, y = CensusPopulation2010)) +
+  geom_bar(stat = "identity", fill = "skyblue", color = "black") +
+  labs(title = "Average Census Population 2010 by Poverty Category",
+       x = "Poverty Category",
+       y = "Average Census Population 2010")
+```
+
+&rarr; For high populated counties, the Children Poverty percentage is lower, as the average population of the county decreases, the children's poverty rate increases. <br>
+
+Let's try to choose from the **variables related to the adults** in order to use it for classifying children's poverty rate.
+
+**Single Parents Households and Children Poverty:**
+
+```{r}
+# Create a box plot
+ggplot(Final_Data, aes(x = Children_Poverty_Category, y = X..Single.Parent.Households)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Percentage of Single Parent Households by Poverty Category",
+       x = "Poverty Category",
+       y = "Percentage of Single Parent Households")
+```
+
+&rarr; The boxplot shows that as the average percentage of households with single parents increases, children in poverty is becoming higher
+
+**Severe Housing Problems and Children Poverty:**
+
+Severe Housing Problems variable: percentage of households with at least 1 of 4 housing problems: overcrowding, high housing costs, lack of kitchen facilities, or lack of plumbing facilities (2012-16)
+
+```{r}
+# Load the dplyr package
+library(dplyr)
+
+# Create a summary table
+summary_table <- Final_Data %>%
+  group_by(Children_Poverty_Category) %>%
+  summarize(
+    Mean_Severe_Housing_Problems = mean(X..Severe.Housing.Problems),
+
+  )
+# Print the summary table
+print(summary_table)
+```
+
+&rarr; As the percentage of severe housing problems increases, the poverty percentage increases: *a variable that can be used as a predictor*
+
+**Smokers Percentage and Children Poverty:**
+
+```{r}
+# Create a horizontal bar plot for Smokers_Percentage
+ggplot(Final_Data, aes(x = Smokers_Percentage, y = reorder(Children_Poverty_Category, Smokers_Percentage))) +
+  geom_bar(stat = "summary", fun = "mean", fill = "lightgreen", color = "black") +
+  labs(x = "Mean Smokers Percentage", y = "Children Poverty Category",
+       title = "Mean Smokers Percentage by Children Poverty Category") +
+  theme_minimal()
+
+
+```
+
+&rarr; An interesting finding, as the mean percentage of smokers (aged over 18) increases, the percentage of children under poverty increases: *another variable that can be used as a predictor*
+
+**Diabetes Percentage and Children Poverty:**
+
+```{r}
+# Create a bar plot for DiabetesPercentage
+ggplot(Final_Data, aes(x = Children_Poverty_Category, y = DiabetesPercentage)) +
+  geom_bar(stat = "summary", fun = "mean", fill = "lightblue", color = "black") +
+  labs(x = "Children Poverty Category", y = "Mean Diabetes Percentage",
+       title = "Mean Diabetes Percentage by Children Poverty Category") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+&rarr; Unexpectedly, the diabetes percentage has an impact as well over the children's poverty: *can be used as a predictor*
+
+
+**Adults with Obesity and Children Poverty:**
+
+```{r}
+# Create a box plot for X..Adults.with.Obesity
+ggplot(Final_Data, aes(x = Children_Poverty_Category, y = X..Adults.with.Obesity)) +
+  geom_boxplot(fill = "lightblue", color = "black") +
+  labs(x = "Children Poverty Category", y = "Percentage of Adults with Obesity",
+       title = "Distribution of Adults with Obesity by Children Poverty Category") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+&rarr; We find that the higher the percentage of adults with obesity problems, the higher the children's poverty. *Can also be used as a predictor* <br>
+
+Since we have more than two categories of children's poverty, a model of **multinomial logistic regression** can be implemented.
+
+### 2. Building and training of a multinomial logistic regression for Children Poverty Percentage:
+
+**multinomial logistic regression**
+In statistics, multinomial logistic regression is a classification method that generalizes logistic regression to multiclass problems, i.e. with more than two possible discrete outcomes. That is, it is a model that is used to predict the probabilities of the different possible outcomes of a categorically distributed dependent variable, given a set of independent variables. <br>
+
+This can be done using the package "VGAM" and the function (vglm):
+
+```{r}
+library(VGAM)
+m0 = vglm(Children_Poverty_Category ~ X..Adults.with.Obesity + DiabetesPercentage + 
+                      Smokers_Percentage + X..Severe.Housing.Problems + X..Single.Parent.Households + 
+                      CensusPopulation2010, family = multinomial, data = Final_Data)
+summary(m0)
+```
+
+We found a "Hauck-Donner effect" (warning given when running the model summary). <br>
+
+**Hauk-Donner Effect:**
+The Hauck-Donner effect is an issue that arises in logistic regression when the estimates of certain parameters become excessively large, leading to very small standard errors making the parameters appear more statistically significant.
+
+&rarr; We will try to scale our variables and also remove outliers
+
+##### Scaling of variables:
+
+```{r}
+# Extract desired variables
+vars_to_scale <- c("X..Adults.with.Obesity", "DiabetesPercentage", 
+                   "Smokers_Percentage", "X..Severe.Housing.Problems", 
+                   "X..Single.Parent.Households", "CensusPopulation2010")
+desired_data <- Final_Data[c(vars_to_scale, "Children_Poverty_Category")]
+
+# Scale numeric variables
+scaled_data <- scale(desired_data[, vars_to_scale])
+
+# Combine scaled numeric variables with the categorical variable
+scaled_final_data <- cbind(scaled_data, desired_data["Children_Poverty_Category"])
+
+# Convert scaled_final_data to data frame if needed
+scaled_final_data <- as.data.frame(scaled_final_data)
+```
+
+##### Removal of outliers:
+
+```{r}
+# Function to remove outliers based on z-score
+remove_outliers <- function(data) {
+  threshold <- 3  # Z-score threshold for outlier detection
+  
+  # Loop through each column
+  for (col in names(data)) {
+    if (is.numeric(data[[col]])) {
+      z <- abs(scale(data[[col]]))  # Calculate z-scores
+      outliers <- which(z > threshold)  # Find outliers
+      data <- data[-outliers, ]  # Remove outliers
+    }
+  }
+  return(data)
+}
+
+# Remove outliers from scaled_final_data
+scaled_final_data_no_outliers <- remove_outliers(scaled_final_data)
+
+# Calculate the number of rows removed
+rows_removed <- nrow(scaled_final_data) - nrow(scaled_final_data_no_outliers)
+
+rows_removed
+```
+In total, the removed rows were found to be 186 indicates the former presence of 186 outliers. Let's check and see how these changes have affected our model:
+
+```{r}
+library(VGAM)
+m1 = vglm(Children_Poverty_Category ~ X..Adults.with.Obesity + DiabetesPercentage + 
+                      Smokers_Percentage + X..Severe.Housing.Problems + X..Single.Parent.Households + 
+                      CensusPopulation2010, family = multinomial, data = scaled_final_data_no_outliers)
+summary(m1)
+```
+
+&rarr; The hauck-Donner effect has be solved. <br>
+
+**INTERPRETATIONS:** <br>
+
+The majority of variables are statistically significant<br>
+
+<u>*Intercepts:* </u> <br>
+
+* Intercept 1 (for low poverty): This is the log odds of being in the low poverty category versus the high poverty (reference category) when all predictors are zero.<br>
+
+* Intercept 2 (for moderate poverty): This is the log odds of being in the moderate poverty category versus the high poverty category when all predictors are zero.
+
+<u> *Predictors:* </u> <br>
+
+* Positive Coefficients: A one-unit increase of these predictors (X..Adults.with.Obesity, CensusPopulation2010) increases the log odds of being in lower poverty categories (low or moderate) relative to the high poverty category.<br>
+
+* Negative Coefficients: A one-unit increase of these predictors (DiabetesPercentage, Smokers_Percentage, X..Severe.Housing.Problems, X..Single.Parent.Households) decreases the log odds of being in lower poverty categories (low or moderate) relative to the high poverty category.<br>
+&rarr; The negative signs for diabetes and smokers percentages indicate that higher rates of these variables are significantly associated with a higher likelihood of being in the high poverty category compared to being in lower poverty categories. <br>
+
+⇒ Cross-validation for assessing the goodness of the model
+
+### 3. Model assessment:
+
+#### Cross-validation:
+
+```{r}
+library(caTools)
+#To ask wajih.
+set.seed(123) # for reproducibility
+split <- sample.split(scaled_final_data_no_outliers$Children_Poverty_Category, SplitRatio = 0.7)
+train_data <- subset(scaled_final_data_no_outliers, split == TRUE)
+test_data <- subset(scaled_final_data_no_outliers, split == FALSE)
+
+m1 <- vglm(Children_Poverty_Category ~ X..Adults.with.Obesity + DiabetesPercentage + 
+                     Smokers_Percentage + X..Severe.Housing.Problems + X..Single.Parent.Households + 
+                    CensusPopulation2010, family = multinomial, data = train_data)
+predictions <- predict(m1, newdata = test_data, type = "response")
+```
+
+
+```{r}
+library(caret)
+
+# Open a sink
+sink(nullfile(), type = "output")
+
+ctrl <- trainControl(method = "cv", number = 10) # 10-fold cross-validation
+m1 <- train(Children_Poverty_Category ~ X..Adults.with.Obesity + DiabetesPercentage + 
+                      Smokers_Percentage + X..Severe.Housing.Problems + X..Single.Parent.Households + 
+                      CensusPopulation2010, data = scaled_final_data_no_outliers, method = "multinom", trControl = ctrl)
+
+# Close the sink
+sink()
+```
+
+```{r}
+library(caret)
+predictions <- predict(m1, newdata = test_data)
+confusionMatrix(predictions, test_data$Children_Poverty_Category)
+```
+
+
+
+```{r}
+# Compute confusion matrix
+conf_matrix <- table(predictions, test_data$Children_Poverty_Category)
+
+# Compute precision, recall, and F1 score for each class
+precision <- diag(conf_matrix) / rowSums(conf_matrix)
+recall <- diag(conf_matrix) / colSums(conf_matrix)
+f1_score <- 2 * precision * recall / (precision + recall)
+
+# Function to calculate specificity for each class
+calculate_specificity <- function(conf_matrix, class) {
+  TN <- sum(conf_matrix[!rownames(conf_matrix) == class, !colnames(conf_matrix) == class])
+  FP <- sum(conf_matrix[!rownames(conf_matrix) == class, colnames(conf_matrix) == class])
+  return(TN / (TN + FP))
+}
+
+# Compute specificity for each class
+specificity <- sapply(rownames(conf_matrix), calculate_specificity, conf_matrix = conf_matrix)
+
+# Print metrics in a formatted table
+cat(sprintf("%-10s%-12s%-12s%-12s%-10s\n", "Class", "Precision", "Recall", "Specificity", "F1 Score"))
+for (i in 1:length(precision)) {
+  cat(sprintf("%-10s%-12.6f%-12.6f%-12.6f%-10.6f\n", names(precision)[i], precision[i], recall[i], specificity[i], f1_score[i]))
+}
+```
+**INTERPRETATIONS:** <br>
+
+⇒ The overall accuracy of the model is 71%. This means that about 71% of the predictions done by the model are correct for the actual classes. <br>
+
+<u>*More:*</u><br>
+
+* Precision (Higher precision indicates fewer false positives): <br>
+ They vary between 61% and 78% <br>
+ 
+* Recall (true positive rate): <br>
+we have higher recall values for the low class  with 85% (Since it is the most prevalent category) <br>
+
+* Specificity (Higher specificity indicates fewer false positives in the negative class): <br>
+We have good values of specificity ranging from 82% to 91% <br>
+
+* F1 Score (harmonic mean of precision and recall): <br>
+Since the Low category is the most present category in the dataset, it has the highest F1 Score <br>
+
+#### ROC curves:
+
+**ROC:** A Receiver Operating Characteristic (ROC) curve is a graphical representation that illustrates the diagnostic ability of a binary classification model across different decision thresholds. It plots the True Positive Rate (Sensitivity) against the False Positive Rate (1 - Specificity) for various threshold values. <br>
+
+**AUC:** The area under the ROC curve (AUC) is a summary metric of the model's performance. AUC quantifies the model's ability to discriminate between the positive and negative classes across all possible thresholds. A higher AUC indicates better discrimination ability, with an AUC of 1 representing a perfect classifier and 0.5 representing a random classifier. <br>
+
+Let's us use the ROC curves for each category and their AUC to asses more the goodness of the model
+
+```{r}
+library(pROC)
+# Predict probabilities
+pred_prob <- predict(m1, newdata = scaled_final_data_no_outliers, type = "prob")
+
+# Create ROC curves for each class
+roc_curves <- lapply(unique(scaled_final_data_no_outliers$Children_Poverty_Category), function(cls) {
+  actual <- ifelse(scaled_final_data_no_outliers$Children_Poverty_Category == cls, 1, 0)
+  pred <- as.numeric(pred_prob[, cls])
+  roc_obj <- roc(actual, pred)
+  auc_val <- auc(roc_obj)
+  # Plot ROC curve
+  plot(roc_obj, main = paste("ROC Curve for", cls), col = "blue", legacy.axes = TRUE)
+  legend("bottomright", legend = paste("AUC =", round(auc_val, 2)), col = "blue", lty = 1)
+  return(roc_obj)
+})
+
+# Define color palette for combined plot
+colors <- c("red", "green", "blue", "purple")
+
+# Plot all ROC curves in one graph
+plot(roc_curves[[1]], col = colors[1], main = "ROC Curves", legacy.axes = TRUE)
+for (i in 2:length(roc_curves)) {
+  lines(roc_curves[[i]], col = colors[i])
+}
+legend("bottomright", legend = unique(scaled_final_data_no_outliers$Children_Poverty_Category), col = colors, lty = 1)
+
+# Print AUC values separately
+for (i in 1:length(roc_curves)) {
+  cat("AUC for", unique(scaled_final_data_no_outliers$Children_Poverty_Category)[i], ":", round(auc(roc_curves[[i]]), 2), "\n")
+}
+```
+
+&rarr; Using the ROC curve, we can see that the multinomial logistic regression model has the best ability to distinguish the "high" category than the other categories (AUC = 0.9) <br>
+&rarr;Other than that, other AUC values are also quite good (0.86 for Low Category and 0.77 for moderate category) <br>
+
+# Conclusion:
+
+Leveraging the high diversity of important variables in the dataset, we successfully developed three models addressing two key topics: two regression models for predicting heart disease mortality and a classification model for children's poverty. Our objective was to utilize the extensive dataset to explore various aspects of statistical modeling, demonstrating the significance and practicality of data science in addressing different health-related real-life scenarios.
