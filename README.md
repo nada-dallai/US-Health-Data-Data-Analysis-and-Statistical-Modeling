@@ -1,1 +1,1 @@
-"# US-Health-Data-Data-Analysis-and-Statistical-Modeling" 
+The dataset was provided by our class teacher and it represents an open dataset that reflects important health-related data on the USA which was used to conduct multiple analyses of the population's Health metrics
